@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mini Messenger</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="auth-container">
+
+    <h1>BWBGRAMM</h1>
+
+    <div id="registerBox">
+      <input id="email" placeholder="Email">
+      <input id="password" type="password" placeholder="Пароль">
+      <input id="username" placeholder="Username">
+      <button onclick="register()">Создать аккаунт</button>
+      <p class="switch-text" onclick="showLogin()">Есть аккаунт?</p>
+    </div>
+
+    <div id="loginBox" style="display:none;">
+      <input id="loginEmail" placeholder="Email">
+      <input id="loginPassword" type="password" placeholder="Пароль">
+      <button onclick="login()">Войти</button>
+      <p class="switch-text" onclick="showRegister()">Создать аккаунт</p>
+    </div>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

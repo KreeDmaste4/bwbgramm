@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="chat-wrapper">
+    <div class="sidebar">
+  
+      <div id="myProfileBtn"></div>
+  
+      <div id="searchBar" class="search-bar">
+        <input type="text" id="searchInput" placeholder="Поиск пользователя">
+        <button id="searchBtn">🔍</button>
+      </div>
+  
+      <!-- Модалка профиля -->
+      <div id="myProfileModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span id="closeMyProfile" class="close">✖</span>
+          </div>
+          <div class="profile-body">
+            <div id="myProfileAvatar" class="avatar-large"></div>
+            <h2 id="myProfileUsername"></h2>
+            <textarea id="bioInput" maxlength="100" placeholder="О себе (до 100 символов)" class="bio-input"></textarea>
+            <button class="bio-btn" onclick="saveBio()">Сохранить</button>
+            <button id="logoutBtn" class="logout-btn" onclick="logout()">Выйти из аккаунта</button>
+          </div>
+        </div>
+      </div>      
+  
+      <h2 id="sidebarTitle">Диалоги</h2>
+      <div id="chatList"></div>
+    </div>
+  
+    <div id="chatArea">
+      <div id="noChat">Выберите чат для общения</div>
+    
+      <div id="chatContainer" class="chat-container" style="display: none">
+        <!-- Navbar -->
+        <div class="chat-navbar">
+          <div id="chatTitle" class="chat-title"></div>
+          <button class="chat-info" onclick="toggleMenu()">⋮</button>
+          <div id="chatMenu" class="chat-menu">
+            <div onclick="openProfile()">Профиль</div>
+            <div onclick="confirmDeleteChat()">Удалить чат</div>
+          </div>
+        </div>
+    
+        <!-- Сообщения -->
+        <div id="messages" class="messages"></div>
+    
+        <!-- Поле ввода -->
+        <div id="inputArea" class="input-area">
+          <textarea id="messageInput" type="text" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
+          <button onclick="sendMessage()">🤙</button>
+        </div>
+      </div>
+    </div>    
+    
+    <div id="profileModal" class="modal-prof">
+      <div class="modal-prof-content">
+        <div class="modal-prof-header">
+          <button onclick="closeProfile()" class="close">✖</button>
+        </div>
+        <h3 id="profileUsername"></h3>
+        <p class="prof-text" id="profileBiotext">О себе:</p>
+        <p id="profileBio"></p>
+        <div class="contact-box">
+          <input id="contactName" placeholder="Сохранить как..">
+          <button onclick="saveContactName()">Сохранить контакт</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="deleteModal" class="modal">
+      <div class="modal-content">
+        <p>Удалить чат?</p>
+        <button onclick="deleteChat()">Да</button>
+        <button onclick="closeDelete()">Нет</button>
+      </div>
+    </div>    
+  </div>  
+  
+  <script type="module" src="chat.js"></script>
+  </body>
+  
+</html>
