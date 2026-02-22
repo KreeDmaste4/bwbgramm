@@ -5,7 +5,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
+  
   <div class="chat-wrapper">
     <div class="sidebar">
   
@@ -16,6 +16,11 @@
         <button id="searchBtn">🔍</button>
       </div>
   
+      <!-- Модалка для открытия картинки -->
+      <div id="imageModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:999;">
+        <img id="modalImage" style="max-width:90%;max-height:90%;border-radius:8px;">
+      </div>
+      
       <!-- Модалка профиля -->
       <div id="myProfileModal" class="modal">
         <div class="modal-content">
@@ -23,16 +28,20 @@
             <span id="closeMyProfile" class="close">✖</span>
           </div>
           <div class="profile-body">
-            <div id="myProfileAvatar" class="avatar-large"></div>
-            <h2 id="myProfileUsername"></h2>
-            <textarea id="bioInput" maxlength="100" placeholder="О себе (до 100 символов)" class="bio-input"></textarea>
+            <input type="file" id="avatarInput" accept="image/*" hidden>
+            <button class="change-ava" onclick="document.getElementById('avatarInput').click()">Изменить аватар</button>
+            <div class="h2">
+              <div id="myProfileAvatar" class="avatar-large"></div>
+              <h2 id="myProfileUsername"></h2>
+            </div>
+            <textarea autocomplete="off" id="bioInput" maxlength="100" placeholder="О себе (до 100 символов)" class="bio-input"></textarea>
             <button class="bio-btn" onclick="saveBio()">Сохранить</button>
             <button id="logoutBtn" class="logout-btn" onclick="logout()">Выйти из аккаунта</button>
           </div>
         </div>
       </div>      
   
-      <h2 id="sidebarTitle">Диалоги</h2>
+      <h1 id="sidebarTitle">Диалоги</h1>
       <div id="chatList"></div>
     </div>
   
@@ -42,8 +51,9 @@
       <div id="chatContainer" class="chat-container" style="display: none">
         <!-- Navbar -->
         <div class="chat-navbar">
+          <img src="/default-avatar.png" id="avatar-friend" alt="">
           <div id="chatTitle" class="chat-title"></div>
-          <button class="chat-info" onclick="toggleMenu()">⋮</button>
+          <button class="chat-info" onclick="toggleMenu(event)">⋮</button>
           <div id="chatMenu" class="chat-menu">
             <div onclick="openProfile()">Профиль</div>
             <div onclick="confirmDeleteChat()">Удалить чат</div>
@@ -52,11 +62,32 @@
     
         <!-- Сообщения -->
         <div id="messages" class="messages"></div>
+        <div id="messageMenu" class="message-menu">
+          <div id="replyOption">Ответить</div>
+          <div id="editOption">Изменить</div>
+          <div id="deleteOption">Удалить</div>
+        </div>
+        <div id="deleteMessageModal" class="modal">
+          <div class="modal-content">
+            <p class="text">Удалить сообщение?</p>
+        
+            <label class="label">
+              <input class="box" type="checkbox" id="deleteForAll">
+              Удалить у всех
+            </label>
+        
+            <button class="da" onclick="confirmDeleteMessage()">Удалить</button>
+            <button class="da" onclick="closeDeleteMessage()">Отмена</button>
+          </div>
+        </div>
     
         <!-- Поле ввода -->
         <div id="inputArea" class="input-area">
-          <textarea id="messageInput" type="text" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
-          <button onclick="sendMessage()">🤙</button>
+          <div class="reply" id="replyPreview" style="display:none;"></div>
+          <textarea autocomplete="off" id="messageInput" type="text" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
+          <input type="file" id="fileInput" hidden>
+          <button class="file" onclick="document.getElementById('fileInput').click()">📎</button>
+          <button class="send-btn" onclick="sendMessage()">🤙</button>
         </div>
       </div>
     </div>    
@@ -66,11 +97,14 @@
         <div class="modal-prof-header">
           <button onclick="closeProfile()" class="close">✖</button>
         </div>
-        <h3 id="profileUsername"></h3>
+        <div class="h2">
+          <div id="profileAvatar" class="avatar-large"></div>
+          <h3 id="profileUsername"></h3>
+        </div>
         <p class="prof-text" id="profileBiotext">О себе:</p>
-        <p id="profileBio"></p>
+        <p class="describe" id="profileBio"></p>
         <div class="contact-box">
-          <input id="contactName" placeholder="Сохранить как..">
+          <input autocomplete="off" id="contactName" placeholder="Сохранить как..">
           <button onclick="saveContactName()">Сохранить контакт</button>
         </div>
       </div>
@@ -78,9 +112,11 @@
     
     <div id="deleteModal" class="modal">
       <div class="modal-content">
-        <p>Удалить чат?</p>
-        <button onclick="deleteChat()">Да</button>
-        <button onclick="closeDelete()">Нет</button>
+        <p class="text">Удалить чат?</p>
+        <div class="choose">
+          <button class="da" onclick="deleteChat()">Да</button>
+          <button class="da" onclick="closeDelete()">Нет</button>
+        </div>
       </div>
     </div>    
   </div>  
