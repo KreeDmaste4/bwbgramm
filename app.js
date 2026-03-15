@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, where } 
+import { getFirestore, collection, addDoc, getDocs, query, where, setDoc } 
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } 
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -19,17 +19,16 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const loader = document.getElementById('loader-overlay');
+let isRegistering = false; // Флаг процесса регистрации
 
 onAuthStateChanged(auth, (user) => {
-    if (user) {
-        // Если пользователь уже залогинен — сразу перекидываем на чат
+    if (user && !isRegistering) { 
+        // Перенаправляем только если это обычный вход, а не регистрация
         window.location.href = "chat.html";
     } else {
-        // Если аккаунта нет — убираем лоадер и показываем форму входа
         loader.style.display = 'none';
     }
 }); 
-
 window.showLogin = function () {
   document.getElementById("registerBox").style.display = "none";
   document.getElementById("loginBox").style.display = "flex";
@@ -53,7 +52,6 @@ window.register = async function() {
   if (username.startsWith("@")) username = username.slice(1);
   username = username.toLowerCase();
 
-  // Проверяем, нет ли уже такого username в Firestore
   const q = query(collection(db, "users"), where("username", "==", username));
   const snapshot = await getDocs(q);
   if (!snapshot.empty) {
@@ -62,11 +60,13 @@ window.register = async function() {
   }
 
   try {
-    // 1️⃣ Создаём пользователя в Auth
+    isRegistering = true; // Блокируем автоматический редирект
+
+    // 1️⃣ Создаём пользователя
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // 2️⃣ Сохраняем в Firestore
+    // 2️⃣ Сохраняем в Firestore (теперь скрипт не прервется редиректом)
     await addDoc(collection(db, "users"), {
       uid: user.uid,
       email: email,
@@ -75,11 +75,13 @@ window.register = async function() {
       createdAt: new Date()
     });
 
-    // 3️⃣ Перенаправление
-    localStorage.setItem("username", username); // Можно использовать для UI
+    localStorage.setItem("username", username);
+    
+    // 3️⃣ Теперь перенаправляем вручную
     window.location.href = "chat.html";
 
   } catch (error) {
+    isRegistering = false; // Если ошибка, возвращаем возможность редиректа
     alert(error.message);
   }
 };
