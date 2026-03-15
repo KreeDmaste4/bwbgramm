@@ -857,21 +857,6 @@
     document.getElementById("sidebarTitle").innerText = "Диалоги";
     loadChats();
   }
-
-  function updateButtonUI() {
-    const mainBtn = document.getElementById("mainActionBtn");
-    const messageInput = document.getElementById("messageInput");
-
-    if (messageInput.value.trim().length > 0) {
-        currentMode = "text";
-        mainBtn.innerText = "🤙"; // Иконка отправки текста
-    } else {
-        // Если текста нет, возвращаем режим из памяти (голос или видео)
-        const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
-        currentMode = lastMedia;
-        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-    }
-  }
   
 /* ===== ЛОГИКА КНОПКИ: ЗАЖАТИЕ ДЛЯ ЗАПИСИ / КЛИК ДЛЯ СМЕНЫ ИЛИ ОТПРАВКИ ===== */
 
