@@ -873,137 +873,147 @@
     }
   }
   
-  /* ===== ЖЕСТЫ ДЛЯ МОБИЛЬНЫХ: СВАЙП ВВЕРХ ДЛЯ ЗАПИСИ ===== */
-  const mainBtn = document.getElementById("mainActionBtn");
-  const messageInput = document.getElementById("messageInput");
-  let touchStartY = 0; // Координата начала касания
-  const swipeThreshold = -50; // Расстояние в пикселях (вверх), после которого стартует запись
+/* ===== ЛОГИКА КНОПКИ: ЗАЖАТИЕ ДЛЯ ЗАПИСИ / КЛИК ДЛЯ СМЕНЫ ИЛИ ОТПРАВКИ ===== */
 
-  // 1. Короткий клик (Переключение или Отправка текста)
-  mainBtn.onclick = () => {
-      if (isRecording) {
-          stopRecording(); // Если уже записываем — отправляем
-          return;
-      }
+const mainBtn = document.getElementById("mainActionBtn");
+const messageInput = document.getElementById("messageInput");
 
-      if (messageInput.value.trim().length > 0) {
-          window.sendMessage(); // Если есть текст — отправляем текст
-      } else {
-          // Если текста нет — переключаем режим Голос / Камера
-          currentMode = (currentMode === "voice") ? "video" : "voice";
-          localStorage.setItem("lastMediaMode", currentMode);
-          mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-      }
-  };
+let pressTimer; 
+let isLongPress = false;
 
-  // 2. Начало касания
-  mainBtn.addEventListener("touchstart", (e) => {
-    // Если мы в режиме текста, не даем начинать запись свайпом
-    if (currentMode === "text" || isRecording) return; 
-    touchStartY = e.touches[0].clientY;
+// 1. Функция обновления иконки (вызываем везде)
+function updateButtonUI() {
+    if (isRecording) {
+        mainBtn.innerText = "🤙"; // Кнопка становится кнопкой отправки во время записи
+        return;
+    }
+    
+    if (messageInput.value.trim().length > 0) {
+        currentMode = "text";
+        mainBtn.innerText = "🤙";
+    } else {
+        const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
+        currentMode = lastMedia;
+        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+    }
+}
+
+// 2. Логика нажатия
+const startPress = (e) => {
+    if (currentMode === "text" || isRecording) return;
+    
+    isLongPress = false;
+    // Если держим 2 секунды — начинаем запись
+    pressTimer = setTimeout(() => {
+        isLongPress = true;
+        startRecording();
+    }, 2000); 
+};
+
+const endPress = (e) => {
+    clearTimeout(pressTimer);
+    
+    // Если это был короткий клик (не зажатие на 2 сек) и мы НЕ в процессе записи
+    if (!isLongPress && !isRecording) {
+        if (messageInput.value.trim().length > 0) {
+            window.sendMessage(); // Отправляем текст
+        } else {
+            // Переключаем режим медиа
+            currentMode = (currentMode === "voice") ? "video" : "voice";
+            localStorage.setItem("lastMediaMode", currentMode);
+            updateButtonUI();
+        }
+    } 
+    // Если мы уже записывали и нажали еще раз — останавливаем
+    else if (isRecording && !isLongPress) {
+         stopRecording();
+    }
+};
+
+// Привязываем события для ПК и Мобилок
+mainBtn.addEventListener("mousedown", startPress);
+mainBtn.addEventListener("mouseup", endPress);
+mainBtn.addEventListener("touchstart", (e) => {
+    // e.preventDefault(); // Можно включить, если вылезает системное меню
+    startPress(e);
+});
+mainBtn.addEventListener("touchend", endPress);
+
+// 3. ФУНКЦИИ ЗАПИСИ
+async function startRecording() {
+    if (isRecording) return;
+
+    try {
+        const constraints = {
+            audio: true,
+            video: currentMode === "video" ? { width: 400, height: 400, facingMode: "user" } : false
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        if (currentMode === "video") {
+            const videoPrev = document.getElementById("videoRecordPreview");
+            videoPrev.style.display = "block";
+            videoPrev.srcObject = stream;
+        }
+
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
+            const file = new File([blob], `record_${Date.now()}.${currentMode === "voice" ? 'ogg' : 'mp4'}`, { type: blob.type });
+            
+            stream.getTracks().forEach(track => track.stop());
+            document.getElementById("videoRecordPreview").style.display = "none";
+            
+            uploadMediaMessage(file, currentMode);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        
+        if (navigator.vibrate) navigator.vibrate(100); // Виброотклик при старте
+        mainBtn.classList.add("recording-active");
+        updateButtonUI();
+        
+    } catch (err) {
+        console.error("Ошибка доступа:", err);
+        alert("Дайте доступ к микрофону/камере");
+    }
+}
+
+function stopRecording() {
+    if (!isRecording) return;
+    mediaRecorder.stop();
+    isRecording = false;
+    mainBtn.classList.remove("recording-active");
+    updateButtonUI();
+}
+
+// 4. ЗАГРУЗКА
+async function uploadMediaMessage(file, type) {
+    const fileName = `${Date.now()}_${file.name}`;
+    
+    const { data, error } = await supabase.storage
+        .from("chat-files")
+        .upload(`media/${fileName}`, file);
+
+    if (error) return console.error("Supabase error:", error);
+
+    const publicUrl = supabase.storage.from("chat-files").getPublicUrl(`media/${fileName}`).data.publicUrl;
+
+    await addDoc(collection(db, "messages"), {
+        chatId: currentChatId,
+        sender: currentUser,
+        createdAt: new Date(),
+        fileUrl: publicUrl,
+        fileType: type, 
+        text: null,
+        deletedFor: []
     });
-
-  // 3. Движение пальца (Свайп)
-  mainBtn.addEventListener("touchmove", (e) => {
-      if (currentMode === "text" || isRecording) return;
-
-      let currentY = e.touches[0].clientY;
-      let distance = currentY - touchStartY;
-
-      // Если палец поднялся выше порога (swipeThreshold)
-      if (distance < swipeThreshold) {
-          startRecording();
-      }
-  });
-
-  // 4. Отмена, если просто отпустили без свайпа (опционально)
-  mainBtn.addEventListener("touchend", () => {
-      touchStartY = 0;
-  });
-
-  /* --- Функции записи (start/stop) — убедись, что они обновляют иконку --- */
-
-  async function startRecording() {
-      if (isRecording) return; // Защита от двойного старта
-      
-      try {
-          const constraints = {
-              audio: true,
-              video: currentMode === "video" ? { width: 400, height: 400, facingMode: "user" } : false
-          };
-
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
-          
-          if (currentMode === "video") {
-              const videoPrev = document.getElementById("videoRecordPreview");
-              videoPrev.style.display = "block";
-              videoPrev.srcObject = stream;
-          }
-
-          mediaRecorder = new MediaRecorder(stream);
-          audioChunks = [];
-
-          mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
-
-          mediaRecorder.onstop = async () => {
-              const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
-              const file = new File([blob], `record_${Date.now()}.${currentMode === "voice" ? 'ogg' : 'mp4'}`, { type: blob.type });
-              
-              stream.getTracks().forEach(track => track.stop());
-              document.getElementById("videoRecordPreview").style.display = "none";
-              
-              uploadMediaMessage(file, currentMode);
-          };
-
-          mediaRecorder.start();
-          isRecording = true;
-          
-          // Меняем вид кнопки на активный
-          mainBtn.innerText = "🤙"; // Или иконка "Отправить/Стоп"
-          mainBtn.classList.add("recording-active");
-          
-      } catch (err) {
-          console.error("Доступ запрещен:", err);
-      }
-  }
-
-  function stopRecording() {
-      if (!isRecording) return;
-      mediaRecorder.stop();
-      isRecording = false;
-      mainBtn.classList.remove("recording-active");
-      // Возвращаем иконку текущего режима
-      mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-  }
-
-  // --- ЗАГРУЗКА В SUPABASE И FIRESTORE ---
-
-  async function uploadMediaMessage(file, type) {
-      const fileName = `${Date.now()}_${file.name}`;
-      
-      // Загружаем в Supabase (у тебя бакет chat-files)
-      const { data, error } = await supabase.storage
-          .from("chat-files")
-          .upload(`media/${fileName}`, file);
-
-      if (error) {
-          console.error("Supabase error:", error);
-          return;
-      }
-
-      const publicUrl = supabase.storage.from("chat-files").getPublicUrl(`media/${fileName}`).data.publicUrl;
-
-      // Сохраняем сообщение в Firestore
-      await addDoc(collection(db, "messages"), {
-          chatId: currentChatId,
-          sender: currentUser,
-          createdAt: new Date(),
-          fileUrl: publicUrl,
-          fileType: type, // "voice" или "video"
-          text: null,
-          deletedFor: []
-      });
-  }
+}
   
   /* ===== SEND MESSAGE ===== */
   window.sendMessage = async function () {

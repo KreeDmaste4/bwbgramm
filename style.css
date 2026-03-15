@@ -6,11 +6,6 @@
   user-select: none;
 }
 
-html, body {
-  touch-action: manipulation; /* Разрешает скролл, но отключает двойной тап-зум */
-  /* touch-action: none; - или полное отключение жестов */
-}
-
 .spinner{
   font-size: 24px;
 }
