@@ -3,8 +3,24 @@
 <head>
   <title>Chat</title>
   <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 </head>
 <body>
+  
+  <div id="loader-overlay" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #1f1f1f; /* Цвет фона под твой дизайн */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+">
+    <div class="spinner">Загрузка...</div> 
+    </div>
   
   <div class="chat-wrapper">
     <div class="sidebar">
@@ -83,11 +99,15 @@
     
         <!-- Поле ввода -->
         <div id="inputArea" class="input-area">
+          <video id="videoRecordPreview" autoplay muted playsinline style="display:none; width: 150px; height: 150px; border-radius: 50%; object-fit: cover; position: absolute; bottom: 80px; right: 20px; border: 3px solid #0088cc; transform: scaleX(-1);"></video>
+        
           <div class="reply" id="replyPreview" style="display:none;"></div>
-          <textarea autocomplete="off" id="messageInput" type="text" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
+          
+          <textarea autocomplete="off" id="messageInput" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
           <input type="file" id="fileInput" hidden>
           <button class="file" onclick="document.getElementById('fileInput').click()">📎</button>
-          <button class="send-btn" onclick="sendMessage()">🤙</button>
+          
+          <button id="mainActionBtn" class="send-btn">🎤</button>
         </div>
       </div>
     </div>    

@@ -18,6 +18,18 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+const loader = document.getElementById('loader-overlay');
+
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        // Если пользователь уже залогинен — сразу перекидываем на чат
+        window.location.href = "chat.html";
+    } else {
+        // Если аккаунта нет — убираем лоадер и показываем форму входа
+        loader.style.display = 'none';
+    }
+}); 
+
 window.showLogin = function () {
   document.getElementById("registerBox").style.display = "none";
   document.getElementById("loginBox").style.display = "flex";
@@ -27,13 +39,6 @@ window.showRegister = function () {
   document.getElementById("loginBox").style.display = "none";
   document.getElementById("registerBox").style.display = "flex";
 };
-
-// Если пользователь уже вошел — отправляем в чат
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    window.location.href = "chat.html";
-  }
-});
 
 window.register = async function() {
   const email = document.getElementById("email").value.trim();

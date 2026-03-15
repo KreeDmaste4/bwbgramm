@@ -31,8 +31,27 @@
   let contactsCache = {};
   let replyingTo = null;
   const storage = getStorage();
+  let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let currentMode = "voice"; // "voice", "video" или "text"
   export { db, auth, storage };
 
+  const loader = document.getElementById('loader-overlay');
+
+  onAuthStateChanged(auth, (user) => {
+      if (!user) {
+          // Если не авторизован — отправляем на главную
+          window.location.href = "index.html";
+      } else {
+          // Если всё ок — скрываем загрузку и показываем интерфейс чата
+          loader.style.display = 'none';
+          
+          // Тут можно вызвать функцию инициализации данных чата
+          // loadMessages(); 
+      }
+  });
+    
   /* ===== UTILS ===== */
   function generateChatId(user1, user2) {
     return [user1, user2].sort().join("_");
@@ -533,7 +552,21 @@
             });
       
             msg.appendChild(img);
-          } else {
+          }else if (data.fileType === "voice") {
+            const audio = document.createElement("audio");
+            audio.src = data.fileUrl;
+            audio.controls = true;
+            audio.className = "voice-msg";
+            msg.appendChild(audio);
+          }else if (data.fileType === "video") {
+              const video = document.createElement("video");
+              video.src = data.fileUrl;
+              video.className = "video-note"; // "кружок"
+              video.onclick = () => video.paused ? video.play() : video.pause();
+              msg.appendChild(video);
+          }else if (data.fileType && data.fileType.startsWith("image/")) {
+              // Твой старый код для картинок...
+          }else {
             const link = document.createElement("a");
             link.href = data.fileUrl;
             link.target = "_blank";
@@ -820,6 +853,138 @@
     loadChats();
   }
 
+  /* ===== ЖЕСТЫ ДЛЯ МОБИЛЬНЫХ: СВАЙП ВВЕРХ ДЛЯ ЗАПИСИ ===== */
+
+  const mainBtn = document.getElementById("mainActionBtn");
+  const messageInput = document.getElementById("messageInput");
+  let touchStartY = 0; // Координата начала касания
+  const swipeThreshold = -50; // Расстояние в пикселях (вверх), после которого стартует запись
+
+  // 1. Короткий клик (Переключение или Отправка текста)
+  mainBtn.onclick = () => {
+      if (isRecording) {
+          stopRecording(); // Если уже записываем — отправляем
+          return;
+      }
+
+      if (messageInput.value.trim().length > 0) {
+          window.sendMessage(); // Если есть текст — отправляем текст
+      } else {
+          // Если текста нет — переключаем режим Голос / Камера
+          currentMode = (currentMode === "voice") ? "video" : "voice";
+          localStorage.setItem("lastMediaMode", currentMode);
+          mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+      }
+  };
+
+  // 2. Начало касания
+  mainBtn.addEventListener("touchstart", (e) => {
+      if (currentMode === "text" || isRecording) return;
+      touchStartY = e.touches[0].clientY;
+  });
+
+  // 3. Движение пальца (Свайп)
+  mainBtn.addEventListener("touchmove", (e) => {
+      if (currentMode === "text" || isRecording) return;
+
+      let currentY = e.touches[0].clientY;
+      let distance = currentY - touchStartY;
+
+      // Если палец поднялся выше порога (swipeThreshold)
+      if (distance < swipeThreshold) {
+          startRecording();
+      }
+  });
+
+  // 4. Отмена, если просто отпустили без свайпа (опционально)
+  mainBtn.addEventListener("touchend", () => {
+      touchStartY = 0;
+  });
+
+  /* --- Функции записи (start/stop) — убедись, что они обновляют иконку --- */
+
+  async function startRecording() {
+      if (isRecording) return; // Защита от двойного старта
+      
+      try {
+          const constraints = {
+              audio: true,
+              video: currentMode === "video" ? { width: 400, height: 400, facingMode: "user" } : false
+          };
+
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          
+          if (currentMode === "video") {
+              const videoPrev = document.getElementById("videoRecordPreview");
+              videoPrev.style.display = "block";
+              videoPrev.srcObject = stream;
+          }
+
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+
+          mediaRecorder.onstop = async () => {
+              const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
+              const file = new File([blob], `record_${Date.now()}.${currentMode === "voice" ? 'ogg' : 'mp4'}`, { type: blob.type });
+              
+              stream.getTracks().forEach(track => track.stop());
+              document.getElementById("videoRecordPreview").style.display = "none";
+              
+              uploadMediaMessage(file, currentMode);
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          
+          // Меняем вид кнопки на активный
+          mainBtn.innerText = "🤙"; // Или иконка "Отправить/Стоп"
+          mainBtn.classList.add("recording-active");
+          
+      } catch (err) {
+          console.error("Доступ запрещен:", err);
+      }
+  }
+
+  function stopRecording() {
+      if (!isRecording) return;
+      mediaRecorder.stop();
+      isRecording = false;
+      mainBtn.classList.remove("recording-active");
+      // Возвращаем иконку текущего режима
+      mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+  }
+
+  // --- ЗАГРУЗКА В SUPABASE И FIRESTORE ---
+
+  async function uploadMediaMessage(file, type) {
+      const fileName = `${Date.now()}_${file.name}`;
+      
+      // Загружаем в Supabase (у тебя бакет chat-files)
+      const { data, error } = await supabase.storage
+          .from("chat-files")
+          .upload(`media/${fileName}`, file);
+
+      if (error) {
+          console.error("Supabase error:", error);
+          return;
+      }
+
+      const publicUrl = supabase.storage.from("chat-files").getPublicUrl(`media/${fileName}`).data.publicUrl;
+
+      // Сохраняем сообщение в Firestore
+      await addDoc(collection(db, "messages"), {
+          chatId: currentChatId,
+          sender: currentUser,
+          createdAt: new Date(),
+          fileUrl: publicUrl,
+          fileType: type, // "voice" или "video"
+          text: null,
+          deletedFor: []
+      });
+  }
+  
   /* ===== SEND MESSAGE ===== */
   window.sendMessage = async function () {
     const input = document.getElementById("messageInput");

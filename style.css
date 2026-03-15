@@ -6,6 +6,15 @@
   user-select: none;
 }
 
+html, body {
+  touch-action: manipulation; /* Разрешает скролл, но отключает двойной тап-зум */
+  /* touch-action: none; - или полное отключение жестов */
+}
+
+.spinner{
+  font-size: 24px;
+}
+
 body, html {
   height: 100%;
 }
@@ -669,6 +678,58 @@ body {
   transform: scale(1.05);
   background-color: #444;
 }
+
+/*media*/
+.video-note {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #0088cc;
+  background: #000;
+}
+
+.voice-msg {
+  max-width: 100%;
+  height: 35px;
+}
+
+/* Эффект пульсации кнопки при записи */
+.recording {
+  color: red !important;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+} 
+.send-btn.recording-active {
+  background-color: #ff4b4b !important; /* Красная кнопка во время записи */
+  color: white !important;
+  transform: scale(1.2);
+  box-shadow: 0 0 15px rgba(255, 75, 75, 0.5);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+/* Стили для кружка-видео */
+.video-note {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #0088cc;
+  display: block;
+  margin: 10px 0;
+}
+
 /* Mobile adaptive */
 @media (max-width: 800px) {
   .sidebar {
