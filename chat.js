@@ -233,6 +233,11 @@
   /* ===== AUTH & DOM READY ===== */
   document.addEventListener("DOMContentLoaded", () => {
 
+    const messageInput = document.getElementById("messageInput");
+    if (messageInput) {
+        messageInput.addEventListener("input", updateButtonUI);
+    }
+    
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "index.html";
@@ -249,7 +254,7 @@
         currentUser = userData.username;
         avatarUrl = userData.avatarUrl; // Берем URL аватарки из базы
       }
-
+      
       // Настроим кнопку профиля (кружок в углу)
       const myBtn = document.getElementById("myProfileBtn");
       if (myBtn) {
@@ -853,8 +858,22 @@
     loadChats();
   }
 
-  /* ===== ЖЕСТЫ ДЛЯ МОБИЛЬНЫХ: СВАЙП ВВЕРХ ДЛЯ ЗАПИСИ ===== */
+  function updateButtonUI() {
+    const mainBtn = document.getElementById("mainActionBtn");
+    const messageInput = document.getElementById("messageInput");
 
+    if (messageInput.value.trim().length > 0) {
+        currentMode = "text";
+        mainBtn.innerText = "🤙"; // Иконка отправки текста
+    } else {
+        // Если текста нет, возвращаем режим из памяти (голос или видео)
+        const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
+        currentMode = lastMedia;
+        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+    }
+  }
+  
+  /* ===== ЖЕСТЫ ДЛЯ МОБИЛЬНЫХ: СВАЙП ВВЕРХ ДЛЯ ЗАПИСИ ===== */
   const mainBtn = document.getElementById("mainActionBtn");
   const messageInput = document.getElementById("messageInput");
   let touchStartY = 0; // Координата начала касания
@@ -879,9 +898,10 @@
 
   // 2. Начало касания
   mainBtn.addEventListener("touchstart", (e) => {
-      if (currentMode === "text" || isRecording) return;
-      touchStartY = e.touches[0].clientY;
-  });
+    // Если мы в режиме текста, не даем начинать запись свайпом
+    if (currentMode === "text" || isRecording) return; 
+    touchStartY = e.touches[0].clientY;
+    });
 
   // 3. Движение пальца (Свайп)
   mainBtn.addEventListener("touchmove", (e) => {
@@ -1021,4 +1041,5 @@
     document.getElementById("replyPreview").style.display = "none";
 
     input.value = "";
+    updateButtonUI();
   };
