@@ -863,127 +863,146 @@
 const mainBtn = document.getElementById("mainActionBtn");
 const messageInput = document.getElementById("messageInput");
 
-let pressTimer; 
+/* ===== ИСПРАВЛЕННАЯ ЛОГИКА МЕДИА-КНОПКИ ===== */
+
+let isSending = false; 
+let pressTimer;
 let isLongPress = false;
 
-// 1. Функция обновления иконки (вызываем везде)
+// 1. Умное обновление интерфейса
 function updateButtonUI() {
-  const mainBtn = document.getElementById("mainActionBtn");
-  const messageInput = document.getElementById("messageInput");
-  
-  if (isSending) return; // Если отправляем — не меняем иконку раньше времени
+    const mainBtn = document.getElementById("mainActionBtn");
+    const messageInput = document.getElementById("messageInput");
+    
+    if (isSending) return; // Не трогаем, пока идет отправка текста
+    if (isRecording) {
+        mainBtn.innerText = "🛑";
+        mainBtn.style.background = "red";
+        return;
+    }
 
-  if (messageInput.value.trim().length > 0) {
-      currentMode = "text";
-      mainBtn.innerText = "🤙";
-  } else {
-      const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
-      currentMode = lastMedia;
-      mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-  }
+    mainBtn.style.background = ""; // Сброс цвета
+
+    if (messageInput.value.trim().length > 0) {
+        currentMode = "text";
+        mainBtn.innerText = "🤙";
+    } else {
+        const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
+        currentMode = lastMedia;
+        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+    }
 }
 
-// 2. Логика нажатия (Исправленная)
+// 2. Обработка нажатий с защитой от системных окон
 const startPress = (e) => {
-  if (currentMode === "text" || isRecording) return;
-  
-  isLongPress = false;
-  pressTimer = setTimeout(() => {
-      isLongPress = true;
-      startRecording();
-  }, 2000); 
+    if (currentMode === "text" || isRecording) return;
+    
+    isLongPress = false;
+    // Запускаем таймер
+    pressTimer = setTimeout(() => {
+        isLongPress = true;
+        startRecording(); 
+    }, 1500); // Уменьшил до 1.5 сек для удобства
 };
 
 const endPress = (e) => {
-  // Останавливаем дальнейшую обработку (чтобы не было второго клика)
-  if (e.cancelable) e.preventDefault(); 
-  
-  clearTimeout(pressTimer);
-  
-  if (isRecording) return; // Если пишем медиа, клик обработает mainBtn.onclick
+    clearTimeout(pressTimer);
+    
+    // Если запись уже пошла, мы не прерываем её здесь (прервем по клику на стоп)
+    if (isRecording) return;
 
-  if (!isLongPress) {
-      if (messageInput.value.trim().length > 0) {
-          window.sendMessage(); // Отправляем текст
-      } else {
-          // Переключаем режим 🎤/📷
-          currentMode = (currentMode === "voice") ? "video" : "voice";
-          localStorage.setItem("lastMediaMode", currentMode);
-          updateButtonUI();
-      }
-  }
+    // Если это был короткий тап
+    if (!isLongPress) {
+        if (messageInput.value.trim().length > 0) {
+            window.sendMessage();
+        } else {
+            // Мгновенное переключение режима
+            currentMode = (currentMode === "voice") ? "video" : "voice";
+            localStorage.setItem("lastMediaMode", currentMode);
+            updateButtonUI();
+        }
+    }
 };
 
-// Привязываем события
+// Привязываем события (добавил stopPropagation, чтобы не "фонило")
 mainBtn.addEventListener("mousedown", startPress);
 mainBtn.addEventListener("mouseup", endPress);
 
-// Для мобильных используем passive: false, чтобы работал preventDefault
-mainBtn.addEventListener("touchstart", startPress, { passive: false });
-mainBtn.addEventListener("touchend", endPress, { passive: false }); 
+mainBtn.addEventListener("touchstart", (e) => {
+    startPress(e);
+}, { passive: true });
 
-// ГЛАВНОЕ: Клик по кнопке когда запись ИДЕТ
+mainBtn.addEventListener("touchend", (e) => {
+    endPress(e);
+}, { passive: true });
+
+// Остановка записи по клику
 mainBtn.onclick = () => {
-  if (isRecording) {
-      stopRecording();
-  }
+    if (isRecording) {
+        stopRecording();
+    }
 };
 
-// 3. ФУНКЦИИ ЗАПИСИ (с исправленными иконками)
+// 3. ФУНКЦИИ ЗАПИСИ С ГАРАНТИРОВАННЫМ СБРОСОМ
 async function startRecording() {
-  if (isRecording) return;
+    if (isRecording) return;
+    
+    try {
+        // Сначала пробуем получить доступ (вот тут вылезет уведомление)
+        const constraints = {
+            audio: true,
+            video: currentMode === "video" ? { width: 400, height: 400, facingMode: "user" } : false
+        };
 
-  try {
-      const constraints = {
-          audio: true,
-          video: currentMode === "video" ? { width: 400, height: 400, facingMode: "user" } : false
-      };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // Если доступ дали, настраиваем Recorder
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      if (currentMode === "video") {
-          const videoPrev = document.getElementById("videoRecordPreview");
-          videoPrev.style.display = "block";
-          videoPrev.srcObject = stream;
-      }
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
+            const file = new File([blob], `record_${Date.now()}.${currentMode === "voice" ? 'ogg' : 'mp4'}`, { type: blob.type });
+            
+            stream.getTracks().forEach(track => track.stop());
+            document.getElementById("videoRecordPreview").style.display = "none";
+            
+            await uploadMediaMessage(file, currentMode);
+            updateButtonUI(); // Возвращаем иконку после загрузки
+        };
 
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+        if (currentMode === "video") {
+            const videoPrev = document.getElementById("videoRecordPreview");
+            videoPrev.style.display = "block";
+            videoPrev.srcObject = stream;
+        }
 
-      mediaRecorder.onstop = async () => {
-          const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
-          const file = new File([blob], `record_${Date.now()}.${currentMode === "voice" ? 'ogg' : 'mp4'}`, { type: blob.type });
-          
-          stream.getTracks().forEach(track => track.stop());
-          document.getElementById("videoRecordPreview").style.display = "none";
-          
-          uploadMediaMessage(file, currentMode);
-      };
+        mediaRecorder.start();
+        isRecording = true;
+        
+        if (navigator.vibrate) navigator.vibrate(100);
+        mainBtn.innerText = "🛑";
+        mainBtn.style.background = "red";
+        mainBtn.classList.add("recording-active");
 
-      mediaRecorder.start();
-      isRecording = true;
-      
-      if (navigator.vibrate) navigator.vibrate(100);
-      
-      // МЕНЯЕМ ВИД КНОПКИ НА СТОП
-      mainBtn.innerText = "🛑"; 
-      mainBtn.style.background = "red";
-      mainBtn.classList.add("recording-active");
-      
-  } catch (err) {
-      console.error("Ошибка доступа:", err);
-      alert("Дайте доступ к микрофону/камере");
-  }
+    } catch (err) {
+        console.error("Медиа ошибка:", err);
+        isRecording = false;
+        isLongPress = false;
+        updateButtonUI(); // ПРИНУДИТЕЛЬНО возвращаем микрофон, если доступ закрыли
+        alert("Доступ к камере/микрофону отклонен или заблокирован.");
+    }
 }
 
 function stopRecording() {
-  if (!isRecording) return;
-  mediaRecorder.stop();
-  isRecording = false;
-  mainBtn.style.background = ""; 
-  mainBtn.classList.remove("recording-active");
-  updateButtonUI(); // Вернет 🎤 или 📷
+    if (!isRecording || !mediaRecorder) return;
+    if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+    }
+    isRecording = false;
+    mainBtn.classList.remove("recording-active");
+    mainBtn.style.background = "";
 }
 
 // 4. ЗАГРУЗКА

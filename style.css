@@ -734,6 +734,25 @@ body {
   margin: 10px 0;
 }
 
+#videoRecordPreview {
+  position: fixed;
+  /* Центрирование */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scaleX(-1); /* Центр + зеркальное отображение */
+  
+  width: 280px;  /* Оптимальный размер для мобилок */
+  height: 280px;
+  
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #0088cc;
+  background-color: #000; /* Черный фон, чтобы не было прозрачности до старта */
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  z-index: 10000; /* Поверх всех модалок и чата */
+  pointer-events: none; /* Чтобы превью не мешало кликать по кнопке "Стоп" */
+}
+
 /* Mobile adaptive */
 @media (max-width: 800px) {
   .sidebar {
