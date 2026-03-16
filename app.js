@@ -72,7 +72,9 @@ window.register = async function() {
       email: email,
       username: username,
       bio: "",
-      createdAt: new Date()
+      createdAt: new Date(),
+      isOnline: true, // Добавляем статус
+      lastSeen: new Date() // Время последнего входа
     });
 
     localStorage.setItem("username", username);
