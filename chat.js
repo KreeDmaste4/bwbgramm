@@ -1029,7 +1029,6 @@ async function uploadMediaMessage(file, type) {
 }
   
   /* ===== SEND MESSAGE ===== */
-  let isSending = false; // Добавь эту переменную ВНЕ функции (в начало файла или перед sendMessage)
 
   window.sendMessage = async function () {
       const input = document.getElementById("messageInput");
