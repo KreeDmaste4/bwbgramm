@@ -1052,55 +1052,60 @@ switchBtn.onclick = async (e) => {
 
 /* ===== ИСПРАВЛЕННАЯ ЛОГИКА ЗАПИСИ И СМЕНЫ КАМЕРЫ ===== */
 
-// Функция для плавного переключения камеры во время записи
 async function switchCameraTracks() {
-    try {
-        // 1. Получаем поток с новой камеры
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 400, height: 400, facingMode: currentFacingMode },
-            audio: true
-        });
+  try {
+      // 1. Сначала полностью останавливаем старые треки, чтобы освободить камеру
+      if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+      }
 
-        const newVideoTrack = newStream.getVideoTracks()[0];
-        
-        // Обновляем превью для пользователя (визуально)
-        const videoPrev = document.getElementById("videoRecordPreview");
-        videoPrev.srcObject = newStream;
-        videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
+      // 2. Запрашиваем новый поток с измененным facingMode
+      const newStream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+              width: { ideal: 400 }, 
+              height: { ideal: 400 }, 
+              facingMode: currentFacingMode 
+          },
+          audio: true
+      });
 
-        // 2. Если идет запись, подменяем трек в текущем рекордере
-        if (isRecording && mediaRecorder) {
-            // ВАЖНО: Вместо пересоздания рекордера (что бьет файл), 
-            // мы используем замену трека в активном потоке, если браузер позволяет.
-            // Но для 100% работы в ТГ/Chrome делаем "бесшовную склейку":
-            
-            mediaRecorder.requestData(); // Забираем текущие данные
-            
-            // Останавливаем старые треки, чтобы освободить камеру
-            currentStream.getTracks().forEach(track => track.stop());
-            
-            currentStream = newStream; // Обновляем ссылку на поток
-            
-            // В мобильных браузерах MediaRecorder часто не умеет менять трек на лету,
-            // поэтому мы создаем новый кусок записи.
-            const oldOnStop = mediaRecorder.onstop;
-            mediaRecorder.onstop = null; // Отключаем старый триггер отправки
-            mediaRecorder.stop();
+      currentStream = newStream;
 
-            mediaRecorder = new MediaRecorder(currentStream);
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
-            mediaRecorder.onstop = oldOnStop; // Возвращаем логику отправки
-            mediaRecorder.start(100);
-        } else {
-            // Если записи нет, просто обновляем поток для превью
-            if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-            currentStream = newStream;
-        }
-    } catch (err) {
-        console.error("Ошибка смены камеры:", err);
-    }
+      // 3. Обновляем визуальное превью
+      const videoPrev = document.getElementById("videoRecordPreview");
+      videoPrev.srcObject = currentStream;
+      await videoPrev.play(); // Важно для ТГ!
+      
+      videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
+
+      // 4. ГЛАВНОЕ: Если идет запись, пересоздаем MediaRecorder
+      if (isRecording) {
+          // Сохраняем текущие данные перед остановкой
+          mediaRecorder.requestData();
+          
+          // Временно убираем обработчик onstop, чтобы не сработала отправка сообщения раньше времени
+          const originalOnStop = mediaRecorder.onstop;
+          mediaRecorder.onstop = null; 
+          mediaRecorder.stop();
+
+          // Создаем новый рекордер на тот же массив данных (audioChunks)
+          mediaRecorder = new MediaRecorder(currentStream);
+          mediaRecorder.ondataavailable = (e) => {
+              if (e.data.size > 0) audioChunks.push(e.data);
+          };
+          
+          // Возвращаем оригинальный обработчик завершения
+          mediaRecorder.onstop = originalOnStop;
+          
+          // Запускаем запись дальше
+          mediaRecorder.start(100);
+          console.log("Камера переключена в процессе записи");
+      }
+
+  } catch (err) {
+      console.error("Ошибка при смене камеры:", err);
+      alert("Не удалось переключить камеру: " + err.message);
+  }
 }
 
 // 4. ФУНКЦИЯ СТАРТА ЗАПИСИ (ИСПРАВЛЕНА ОТПРАВКА)
