@@ -1031,22 +1031,61 @@ mainBtn.onclick = (e) => {
 
 /* ===== ЛОГИКА СМЕНЫ КАМЕРЫ ===== */
 
-let currentFacingMode = "user"; // "user" - передняя, "environment" - задняя
+/* ===== ЛОГИКА СМЕНЫ КАМЕРЫ ===== */
+
+let currentFacingMode = "user"; 
 let currentStream = null;
 
 const switchBtn = document.getElementById("switchCameraBtn");
 
 switchBtn.onclick = async (e) => {
-    e.stopPropagation(); // Чтобы не сработал клик по кнопке записи
+    e.stopPropagation(); 
     
     // Меняем режим
     currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
     
-    // Если запись уже идет, нам нужно обновить поток "на лету"
-    if (isRecording && currentMode === "video") {
-        await restartStream();
+    // Если запись идет или превью открыто — меняем камеру на лету
+    if (currentStream && currentMode === "video") {
+        await switchCameraTracks();
     }
 };
+
+async function switchCameraTracks() {
+    try {
+        // Получаем поток с новой камеры
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+                width: { ideal: 400 }, 
+                height: { ideal: 400 }, 
+                facingMode: currentFacingMode 
+            },
+            audio: true // Оставляем звук
+        });
+
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        const oldVideoTrack = currentStream.getVideoTracks()[0];
+
+        // 1. Останавливаем старую камеру
+        oldVideoTrack.stop();
+
+        // 2. УДАЛЯЕМ старый трек и ДОБАВЛЯЕМ новый в текущий поток
+        currentStream.removeTrack(oldVideoTrack);
+        currentStream.addTrack(newVideoTrack);
+
+        // 3. Обновляем визуальное превью (кружок)
+        const videoPrev = document.getElementById("videoRecordPreview");
+        videoPrev.srcObject = currentStream; 
+        
+        // Зеркалим только переднюю камеру
+        videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
+
+        // 4. ГЛАВНОЕ: Сообщаем MediaRecorder-у, что трек сменился (для некоторых браузеров)
+        // В большинстве современных браузеров MediaRecorder подхватит изменение в currentStream автоматически
+        
+    } catch (err) {
+        console.error("Не удалось сменить камеру:", err);
+    }
+}
 
 async function restartStream() {
     if (!currentStream) return;
@@ -1094,24 +1133,28 @@ async function startRecording() {
           video: currentMode === "video" ? { 
               width: { ideal: 400 }, 
               height: { ideal: 400 }, 
-              facingMode: currentFacingMode // Используем переменную
+              facingMode: currentFacingMode 
           } : false
       };
 
+      // Запрашиваем доступ
       currentStream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Настройка видео-превью
       if (currentMode === "video") {
           const videoPrev = document.getElementById("videoRecordPreview");
           const container = document.getElementById("videoContainer");
           
+          // Сначала показываем контейнер, потом цепляем поток
           container.style.display = "block";
           videoPrev.srcObject = currentStream;
           
-          // Зеркалим только если камера "user" (передняя)
+          // Ждем, пока видео реально начнет проигрываться в превью
+          await videoPrev.play(); 
+
           videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
       }
 
+      // Создаем рекордер на базе currentStream
       mediaRecorder = new MediaRecorder(currentStream);
       audioChunks = [];
       
@@ -1120,23 +1163,33 @@ async function startRecording() {
       };
 
       mediaRecorder.onstop = async () => {
-          const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
-          const file = new File([blob], `rec_${Date.now()}.mp4`, { type: blob.type });
+          const blob = new Blob(audioChunks, { 
+              type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' 
+          });
+          const ext = currentMode === "voice" ? 'ogg' : 'mp4';
+          const file = new File([blob], `rec_${Date.now()}.${ext}`, { type: blob.type });
           
-          currentStream.getTracks().forEach(t => t.stop());
+          // Полная остановка всех камер
+          if (currentStream) {
+              currentStream.getTracks().forEach(t => t.stop());
+          }
           document.getElementById("videoContainer").style.display = "none";
           
           await uploadMediaMessage(file, currentMode);
           updateButtonUI();
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Сохраняем данные каждые 100мс для надежности
       isRecording = true;
+      
+      if (navigator.vibrate) navigator.vibrate(100);
       updateButtonUI();
 
   } catch (err) {
-      console.error(err);
+      console.error("Ошибка при старте записи:", err);
+      isRecording = false;
       updateButtonUI();
+      alert("Доступ к камере/микрофону отклонен или невозможен.");
   }
 }
 
