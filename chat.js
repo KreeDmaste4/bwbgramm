@@ -31,10 +31,7 @@
   let contactsCache = {};
   let replyingTo = null;
   const storage = getStorage();
-  let mediaRecorder = null;
-    let audioChunks = [];
-    let isRecording = false;
-    let currentMode = "voice"; // "voice", "video" или "text"
+  let currentMode = "voice"; // "voice", "video" или "text"
   export { db, auth, storage };
 
   const loader = document.getElementById('loader-overlay');
@@ -863,114 +860,121 @@
 const mainBtn = document.getElementById("mainActionBtn");
 const messageInput = document.getElementById("messageInput");
 
-/* ===== ИСПРАВЛЕННАЯ ЛОГИКА МЕДИА-КНОПКИ ===== */
+/* ===== БЛОК ЗАПИСИ И УПРАВЛЕНИЯ КНОПКОЙ (ПОЛНЫЙ) ===== */
 
-let isSending = false; 
 let pressTimer;
 let isLongPress = false;
+let isRecording = false;
+let isSending = false;
+let mediaRecorder = null;
+let audioChunks = [];
 
-// 1. Умное обновление интерфейса
+// 1. Умное обновление интерфейса кнопки
 function updateButtonUI() {
-  const mainBtn = document.getElementById("mainActionBtn");
-  const messageInput = document.getElementById("messageInput");
-  
-  if (isSending) return;
-  if (isRecording) return; // Если запись идет, иконка уже 🛑, не трогаем
+    const mainBtn = document.getElementById("mainActionBtn");
+    const messageInput = document.getElementById("messageInput");
+    
+    if (isSending) return; // Не менять иконку, пока идет отправка текста
 
-  if (messageInput.value.trim().length > 0) {
-      currentMode = "text";
-      mainBtn.innerText = "🤙";
-      mainBtn.style.background = ""; 
-  } else {
-      // Берем текущий режим, который уже сохранен в памяти или localStorage
-      const savedMode = localStorage.getItem("lastMediaMode") || "voice";
-      currentMode = savedMode;
-      mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-      mainBtn.style.background = "";
-  }
+    if (isRecording) {
+        mainBtn.innerText = "🛑";
+        mainBtn.style.background = "red";
+        mainBtn.style.color = "white";
+        return;
+    }
+
+    // Сброс стилей, если запись не идет
+    mainBtn.style.background = "";
+    mainBtn.style.color = "";
+
+    if (messageInput.value.trim().length > 0) {
+        currentMode = "text";
+        mainBtn.innerText = "🤙";
+    } else {
+        const savedMode = localStorage.getItem("lastMediaMode") || "voice";
+        currentMode = savedMode;
+        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+    }
 }
 
-// 2. Обработка нажатий с защитой от системных окон
-const startPress = (e) => {
-    if (currentMode === "text" || isRecording) return;
+// 2. Логика нажатий (Pointer Events — лучшее для мобилок и ТГ)
+mainBtn.onpointerdown = (e) => {
+    // Если есть текст в поле — запись не начинаем, просто ждем клика для отправки
+    if (messageInput.value.trim().length > 0 || isRecording) return;
     
     isLongPress = false;
-    // Запускаем таймер
     pressTimer = setTimeout(() => {
         isLongPress = true;
         startRecording(); 
-    }, 1500); // Уменьшил до 1.5 сек для удобства
+    }, 1500); // Зажать на 1.5 секунды для старта
 };
 
-const endPress = (e) => {
-  // Останавливаем "дребезг" событий на телефонах
-  if (e.type === 'touchend') {
-      e.preventDefault(); 
-  }
-  
-  clearTimeout(pressTimer);
-  
-  if (isRecording) return;
+mainBtn.onpointerup = (e) => {
+    clearTimeout(pressTimer);
+    
+    // Если запись уже идет — нажатие её НЕ останавливает здесь (остановит onclick)
+    if (isRecording) return;
 
-  if (!isLongPress) {
-      if (messageInput.value.trim().length > 0) {
-          window.sendMessage();
-      } else {
-          // Переключаем режим
-          currentMode = (currentMode === "voice") ? "video" : "voice";
-          localStorage.setItem("lastMediaMode", currentMode);
-          // Сразу жестко ставим иконку, не дожидаясь updateButtonUI
-          mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-      }
-  }
-};  
+    // Если это был короткий клик
+    if (!isLongPress) {
+        if (messageInput.value.trim().length > 0) {
+            window.sendMessage(); // Отправка текста
+        } else {
+            // Переключение режима 🎤 / 📷
+            currentMode = (currentMode === "voice") ? "video" : "voice";
+            localStorage.setItem("lastMediaMode", currentMode);
+            updateButtonUI();
+        }
+    }
+};
 
-// Привязываем события (добавил stopPropagation, чтобы не "фонило")
-mainBtn.addEventListener("mousedown", startPress);
-mainBtn.addEventListener("mouseup", endPress);
+// Если палец соскочил с кнопки — отменяем таймер старта
+mainBtn.onpointerleave = () => clearTimeout(pressTimer);
 
-mainBtn.addEventListener("touchstart", (e) => {
-  startPress(e);
-}, { passive: false });
-
-mainBtn.addEventListener("touchend", (e) => {
-  endPress(e);
-}, { passive: false }); 
-
-// Остановка записи по клику
-mainBtn.onclick = () => {
+// 3. Клик для остановки уже идущей записи
+mainBtn.onclick = (e) => {
     if (isRecording) {
         stopRecording();
     }
 };
 
-// 3. ФУНКЦИИ ЗАПИСИ С ГАРАНТИРОВАННЫМ СБРОСОМ
+// 4. ФУНКЦИЯ СТАРТА ЗАПИСИ
 async function startRecording() {
     if (isRecording) return;
     
     try {
-        // Сначала пробуем получить доступ (вот тут вылезет уведомление)
         const constraints = {
             audio: true,
-            video: currentMode === "video" ? { width: 400, height: 400, facingMode: "user" } : false
+            video: currentMode === "video" ? { 
+                width: { ideal: 400 }, 
+                height: { ideal: 400 }, 
+                facingMode: "user" 
+            } : false
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
-        // Если доступ дали, настраиваем Recorder
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
-        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
 
         mediaRecorder.onstop = async () => {
-            const blob = new Blob(audioChunks, { type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' });
-            const file = new File([blob], `record_${Date.now()}.${currentMode === "voice" ? 'ogg' : 'mp4'}`, { type: blob.type });
+            const blob = new Blob(audioChunks, { 
+                type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' 
+            });
+            const ext = currentMode === "voice" ? 'ogg' : 'mp4';
+            const file = new File([blob], `record_${Date.now()}.${ext}`, { type: blob.type });
             
+            // Останавливаем камеру/микрофон
             stream.getTracks().forEach(track => track.stop());
             document.getElementById("videoRecordPreview").style.display = "none";
             
+            // Загружаем в базу
             await uploadMediaMessage(file, currentMode);
-            updateButtonUI(); // Возвращаем иконку после загрузки
+            updateButtonUI();
         };
 
         if (currentMode === "video") {
@@ -983,27 +987,28 @@ async function startRecording() {
         isRecording = true;
         
         if (navigator.vibrate) navigator.vibrate(100);
-        mainBtn.innerText = "🛑";
-        mainBtn.style.background = "red";
-        mainBtn.classList.add("recording-active");
+        updateButtonUI(); // Сделает кнопку красной со значком 🛑
 
     } catch (err) {
-        console.error("Медиа ошибка:", err);
-        isRecording = false;
+        console.error("Ошибка доступа:", err);
         isLongPress = false;
-        updateButtonUI(); // ПРИНУДИТЕЛЬНО возвращаем микрофон, если доступ закрыли
-        alert("Доступ к камере/микрофону отклонен или заблокирован.");
+        isRecording = false;
+        updateButtonUI();
+        alert("Не удалось получить доступ к микрофону/камере. Проверьте разрешения в браузере.");
     }
 }
 
+// 5. ФУНКЦИЯ ОСТАНОВКИ
 function stopRecording() {
     if (!isRecording || !mediaRecorder) return;
+
     if (mediaRecorder.state !== "inactive") {
         mediaRecorder.stop();
     }
+    
     isRecording = false;
     mainBtn.classList.remove("recording-active");
-    mainBtn.style.background = "";
+    updateButtonUI();
 }
 
 // 4. ЗАГРУЗКА

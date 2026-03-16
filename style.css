@@ -753,6 +753,12 @@ body {
   pointer-events: none; /* Чтобы превью не мешало кликать по кнопке "Стоп" */
 }
 
+.send-btn {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: none; /* Запрещает браузеру самому обрабатывать жесты */
+}
+
 /* Mobile adaptive */
 @media (max-width: 800px) {
   .sidebar {
