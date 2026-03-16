@@ -741,8 +741,8 @@ body {
   left: 50%;
   transform: translate(-50%, -50%) scaleX(-1); /* Центр + зеркальное отображение */
   
-  width: 280px;  /* Оптимальный размер для мобилок */
-  height: 280px;
+  width: 350px;  /* Оптимальный размер для мобилок */
+  height: 350px;
   
   border-radius: 50%;
   object-fit: cover;

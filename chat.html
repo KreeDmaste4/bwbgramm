@@ -99,7 +99,23 @@
       
           <!-- Поле ввода -->
           <div id="inputArea" class="input-area">
-            <video id="videoRecordPreview" autoplay muted playsinline style="display:none;"></video>  
+            <div id="videoContainer" style="position: relative; display: none;">
+              <video id="videoRecordPreview" autoplay muted playsinline></video>
+              <button id="switchCameraBtn" style="
+                  position: absolute; 
+                  top: 10px; 
+                  right: 10px; 
+                  z-index: 10001; 
+                  background: rgba(0,0,0,0.5); 
+                  border: none; 
+                  border-radius: 50%; 
+                  width: 40px; 
+                  height: 40px; 
+                  color: white; 
+                  font-size: 20px; 
+                  cursor: pointer;
+              ">🔄</button>
+          </div>
           
             <div class="reply" id="replyPreview" style="display:none;"></div>
             
