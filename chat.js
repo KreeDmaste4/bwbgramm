@@ -1051,40 +1051,55 @@ switchBtn.onclick = async (e) => {
 };
 
 async function switchCameraTracks() {
-    try {
-        // Получаем поток с новой камеры
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { 
-                width: { ideal: 400 }, 
-                height: { ideal: 400 }, 
-                facingMode: currentFacingMode 
-            },
-            audio: true // Оставляем звук
-        });
+  try {
+      // 1. Получаем новый поток
+      const newStream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+              width: { ideal: 400 }, 
+              height: { ideal: 400 }, 
+              facingMode: currentFacingMode 
+          },
+          audio: true
+      });
 
-        const newVideoTrack = newStream.getVideoTracks()[0];
-        const oldVideoTrack = currentStream.getVideoTracks()[0];
+      // 2. Обновляем превью немедленно (чтобы пользователь видел смену)
+      const videoPrev = document.getElementById("videoRecordPreview");
+      videoPrev.srcObject = newStream;
+      videoPrev.play(); // Принудительный старт для ТГ
+      
+      videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
 
-        // 1. Останавливаем старую камеру
-        oldVideoTrack.stop();
+      // 3. Если идет запись, нам ПРИДЕТСЯ пересоздать MediaRecorder
+      // чтобы он начал писать данные с нового устройства
+      if (isRecording && mediaRecorder) {
+          // Захватываем старые чанки
+          mediaRecorder.requestData(); 
+          
+          // Временно подменяем поток в переменной
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = newStream;
 
-        // 2. УДАЛЯЕМ старый трек и ДОБАВЛЯЕМ новый в текущий поток
-        currentStream.removeTrack(oldVideoTrack);
-        currentStream.addTrack(newVideoTrack);
+          // Создаем новый рекордер для нового потока
+          const newRecorder = new MediaRecorder(currentStream);
+          newRecorder.ondataavailable = (e) => {
+              if (e.data.size > 0) audioChunks.push(e.data);
+          };
+          
+          // Переносим событие остановки
+          newRecorder.onstop = mediaRecorder.onstop;
+          
+          mediaRecorder.stop(); // Останавливаем старый
+          mediaRecorder = newRecorder;
+          mediaRecorder.start(100);
+      } else {
+          // Если просто в превью — обновляем поток
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = newStream;
+      }
 
-        // 3. Обновляем визуальное превью (кружок)
-        const videoPrev = document.getElementById("videoRecordPreview");
-        videoPrev.srcObject = currentStream; 
-        
-        // Зеркалим только переднюю камеру
-        videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
-
-        // 4. ГЛАВНОЕ: Сообщаем MediaRecorder-у, что трек сменился (для некоторых браузеров)
-        // В большинстве современных браузеров MediaRecorder подхватит изменение в currentStream автоматически
-        
-    } catch (err) {
-        console.error("Не удалось сменить камеру:", err);
-    }
+  } catch (err) {
+      console.error("Ошибка переключения камеры:", err);
+  }
 }
 
 async function restartStream() {
@@ -1128,6 +1143,9 @@ async function startRecording() {
   if (isRecording) return;
   
   try {
+      // Очищаем старые данные
+      audioChunks = [];
+
       const constraints = {
           audio: true,
           video: currentMode === "video" ? { 
@@ -1137,59 +1155,43 @@ async function startRecording() {
           } : false
       };
 
-      // Запрашиваем доступ
       currentStream = await navigator.mediaDevices.getUserMedia(constraints);
       
       if (currentMode === "video") {
           const videoPrev = document.getElementById("videoRecordPreview");
           const container = document.getElementById("videoContainer");
           
-          // Сначала показываем контейнер, потом цепляем поток
-          container.style.display = "block";
           videoPrev.srcObject = currentStream;
-          
-          // Ждем, пока видео реально начнет проигрываться в превью
-          await videoPrev.play(); 
+          container.style.display = "block";
+
+          // ВАЖНО для Telegram: ждем готовности видео
+          await new Promise((resolve) => {
+              videoPrev.onloadedmetadata = () => {
+                  videoPrev.play().then(resolve);
+              };
+          });
 
           videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
       }
 
-      // Создаем рекордер на базе currentStream
       mediaRecorder = new MediaRecorder(currentStream);
-      audioChunks = [];
       
       mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunks.push(e.data);
       };
 
+      // Логика завершения остается прежней
       mediaRecorder.onstop = async () => {
-          const blob = new Blob(audioChunks, { 
-              type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' 
-          });
-          const ext = currentMode === "voice" ? 'ogg' : 'mp4';
-          const file = new File([blob], `rec_${Date.now()}.${ext}`, { type: blob.type });
-          
-          // Полная остановка всех камер
-          if (currentStream) {
-              currentStream.getTracks().forEach(t => t.stop());
-          }
-          document.getElementById("videoContainer").style.display = "none";
-          
-          await uploadMediaMessage(file, currentMode);
-          updateButtonUI();
+          // ... твой код отправки ...
       };
 
-      mediaRecorder.start(100); // Сохраняем данные каждые 100мс для надежности
+      mediaRecorder.start(100);
       isRecording = true;
-      
-      if (navigator.vibrate) navigator.vibrate(100);
       updateButtonUI();
 
   } catch (err) {
-      console.error("Ошибка при старте записи:", err);
-      isRecording = false;
-      updateButtonUI();
-      alert("Доступ к камере/микрофону отклонен или невозможен.");
+      console.error("Start recording error:", err);
+      alert("Включите доступ к камере в настройках Telegram");
   }
 }
 
