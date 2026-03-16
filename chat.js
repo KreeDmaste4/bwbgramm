@@ -871,26 +871,23 @@ let isLongPress = false;
 
 // 1. Умное обновление интерфейса
 function updateButtonUI() {
-    const mainBtn = document.getElementById("mainActionBtn");
-    const messageInput = document.getElementById("messageInput");
-    
-    if (isSending) return; // Не трогаем, пока идет отправка текста
-    if (isRecording) {
-        mainBtn.innerText = "🛑";
-        mainBtn.style.background = "red";
-        return;
-    }
+  const mainBtn = document.getElementById("mainActionBtn");
+  const messageInput = document.getElementById("messageInput");
+  
+  if (isSending) return;
+  if (isRecording) return; // Если запись идет, иконка уже 🛑, не трогаем
 
-    mainBtn.style.background = ""; // Сброс цвета
-
-    if (messageInput.value.trim().length > 0) {
-        currentMode = "text";
-        mainBtn.innerText = "🤙";
-    } else {
-        const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
-        currentMode = lastMedia;
-        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-    }
+  if (messageInput.value.trim().length > 0) {
+      currentMode = "text";
+      mainBtn.innerText = "🤙";
+      mainBtn.style.background = ""; 
+  } else {
+      // Берем текущий режим, который уже сохранен в памяти или localStorage
+      const savedMode = localStorage.getItem("lastMediaMode") || "voice";
+      currentMode = savedMode;
+      mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+      mainBtn.style.background = "";
+  }
 }
 
 // 2. Обработка нажатий с защитой от системных окон
@@ -906,35 +903,39 @@ const startPress = (e) => {
 };
 
 const endPress = (e) => {
-    clearTimeout(pressTimer);
-    
-    // Если запись уже пошла, мы не прерываем её здесь (прервем по клику на стоп)
-    if (isRecording) return;
+  // Останавливаем "дребезг" событий на телефонах
+  if (e.type === 'touchend') {
+      e.preventDefault(); 
+  }
+  
+  clearTimeout(pressTimer);
+  
+  if (isRecording) return;
 
-    // Если это был короткий тап
-    if (!isLongPress) {
-        if (messageInput.value.trim().length > 0) {
-            window.sendMessage();
-        } else {
-            // Мгновенное переключение режима
-            currentMode = (currentMode === "voice") ? "video" : "voice";
-            localStorage.setItem("lastMediaMode", currentMode);
-            updateButtonUI();
-        }
-    }
-};
+  if (!isLongPress) {
+      if (messageInput.value.trim().length > 0) {
+          window.sendMessage();
+      } else {
+          // Переключаем режим
+          currentMode = (currentMode === "voice") ? "video" : "voice";
+          localStorage.setItem("lastMediaMode", currentMode);
+          // Сразу жестко ставим иконку, не дожидаясь updateButtonUI
+          mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+      }
+  }
+};  
 
 // Привязываем события (добавил stopPropagation, чтобы не "фонило")
 mainBtn.addEventListener("mousedown", startPress);
 mainBtn.addEventListener("mouseup", endPress);
 
 mainBtn.addEventListener("touchstart", (e) => {
-    startPress(e);
-}, { passive: true });
+  startPress(e);
+}, { passive: false });
 
 mainBtn.addEventListener("touchend", (e) => {
-    endPress(e);
-}, { passive: true });
+  endPress(e);
+}, { passive: false }); 
 
 // Остановка записи по клику
 mainBtn.onclick = () => {
