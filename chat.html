@@ -1,147 +1,147 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Chat</title>
-  <link rel="stylesheet" href="style.css">
-  <meta name="viewport" content="user-scalable=no"> 
-</head>
-<body>
-  
-  <div id="loader-overlay" style="
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: #1f1f1f; /* Цвет фона под твой дизайн */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-">
-    <div class="spinner">Загрузка...</div> 
-    </div>
-  
-  <div class="chat-wrapper">
-    <div class="sidebar">
-  
-      <div id="myProfileBtn"></div>
-  
-      <div id="searchBar" class="search-bar">
-        <input type="text" id="searchInput" placeholder="Поиск пользователя">
-        <button id="searchBtn">🔍</button>
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Chat</title>
+    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="user-scalable=no"> 
+  </head>
+  <body>
+    
+    <div id="loader-overlay" style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1f1f1f; /* Цвет фона под твой дизайн */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+  ">
+      <div class="spinner">Загрузка...</div> 
       </div>
-  
-      <!-- Модалка для открытия картинки -->
-      <div id="imageModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:999;">
-        <img id="modalImage" style="max-width:90%;max-height:90%;border-radius:8px;">
+    
+    <div class="chat-wrapper">
+      <div class="sidebar">
+    
+        <div id="myProfileBtn"></div>
+    
+        <div id="searchBar" class="search-bar">
+          <input type="text" id="searchInput" placeholder="Поиск пользователя">
+          <button id="searchBtn">🔍</button>
+        </div>
+    
+        <!-- Модалка для открытия картинки -->
+        <div id="imageModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:999;">
+          <img id="modalImage" style="max-width:90%;max-height:90%;border-radius:8px;">
+        </div>
+        
+        <!-- Модалка профиля -->
+        <div id="myProfileModal" class="modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <span id="closeMyProfile" class="close">✖</span>
+            </div>
+            <div class="profile-body">
+              <input type="file" id="avatarInput" accept="image/*" hidden>
+              <button class="change-ava" onclick="document.getElementById('avatarInput').click()">Изменить аватар</button>
+              <div class="h2">
+                <div id="myProfileAvatar" class="avatar-large"></div>
+                <h2 id="myProfileUsername"></h2>
+              </div>
+              <textarea autocomplete="off" id="bioInput" maxlength="100" placeholder="О себе (до 100 символов)" class="bio-input"></textarea>
+              <button class="bio-btn" onclick="saveBio()">Сохранить</button>
+              <button id="logoutBtn" class="logout-btn" onclick="logout()">Выйти из аккаунта</button>
+            </div>
+          </div>
+        </div>      
+    
+        <h1 id="sidebarTitle">Диалоги</h1>
+        <div id="chatList"></div>
+      </div>
+    
+      <div id="chatArea">
+        <div id="noChat">Выберите чат для общения</div>
+      
+        <div id="chatContainer" class="chat-container" style="display: none">
+          <!-- Navbar -->
+          <div class="chat-navbar">
+            <img src="" id="avatar-friend" alt="">
+            <div id="chatTitle" class="chat-title"></div>
+            <button class="chat-info" onclick="toggleMenu(event)">⋮</button>
+            <div id="chatMenu" class="chat-menu">
+              <div onclick="openProfile()">Профиль</div>
+              <div onclick="confirmDeleteChat()">Удалить чат</div>
+            </div>
+          </div>
+      
+          <!-- Сообщения -->
+          <div id="messages" class="messages"></div>
+          <div id="messageMenu" class="message-menu">
+            <div id="replyOption">Ответить</div>
+            <div id="editOption">Изменить</div>
+            <div id="deleteOption">Удалить</div>
+          </div>
+          <div id="deleteMessageModal" class="modal">
+            <div class="modal-content">
+              <p class="text">Удалить сообщение?</p>
+          
+              <label class="label">
+                <input class="box" type="checkbox" id="deleteForAll">
+                Удалить у всех
+              </label>
+          
+              <button class="da" onclick="confirmDeleteMessage()">Удалить</button>
+              <button class="da" onclick="closeDeleteMessage()">Отмена</button>
+            </div>
+          </div>
+      
+          <!-- Поле ввода -->
+          <div id="inputArea" class="input-area">
+            <video id="videoRecordPreview" autoplay muted playsinline style="display:none; width: 300px; height: 300px; border-radius: 50%; object-fit: cover; position: fixed; bottom: 0; right: 0; border: 3px solid #0088cc; transform: scaleX(-1);"></video>
+          
+            <div class="reply" id="replyPreview" style="display:none;"></div>
+            
+            <textarea autocomplete="off" id="messageInput" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
+            <input type="file" id="fileInput" hidden>
+            <button class="file" onclick="document.getElementById('fileInput').click()">📎</button>
+            
+            <button id="mainActionBtn" class="send-btn">🎤</button>
+          </div>
+        </div>
+      </div>    
+      
+      <div id="profileModal" class="modal-prof">
+        <div class="modal-prof-content">
+          <div class="modal-prof-header">
+            <button onclick="closeProfile()" class="close">✖</button>
+          </div>
+          <div class="h2">
+            <div id="profileAvatar" class="avatar-large"></div>
+            <h3 id="profileUsername"></h3>
+          </div>
+          <p class="prof-text" id="profileBiotext">О себе:</p>
+          <p class="describe" id="profileBio"></p>
+          <div class="contact-box">
+            <input autocomplete="off" id="contactName" placeholder="Сохранить как..">
+            <button onclick="saveContactName()">Сохранить контакт</button>
+          </div>
+        </div>
       </div>
       
-      <!-- Модалка профиля -->
-      <div id="myProfileModal" class="modal">
+      <div id="deleteModal" class="modal">
         <div class="modal-content">
-          <div class="modal-header">
-            <span id="closeMyProfile" class="close">✖</span>
-          </div>
-          <div class="profile-body">
-            <input type="file" id="avatarInput" accept="image/*" hidden>
-            <button class="change-ava" onclick="document.getElementById('avatarInput').click()">Изменить аватар</button>
-            <div class="h2">
-              <div id="myProfileAvatar" class="avatar-large"></div>
-              <h2 id="myProfileUsername"></h2>
-            </div>
-            <textarea autocomplete="off" id="bioInput" maxlength="100" placeholder="О себе (до 100 символов)" class="bio-input"></textarea>
-            <button class="bio-btn" onclick="saveBio()">Сохранить</button>
-            <button id="logoutBtn" class="logout-btn" onclick="logout()">Выйти из аккаунта</button>
+          <p class="text">Удалить чат?</p>
+          <div class="choose">
+            <button class="da" onclick="deleteChat()">Да</button>
+            <button class="da" onclick="closeDelete()">Нет</button>
           </div>
         </div>
-      </div>      
-  
-      <h1 id="sidebarTitle">Диалоги</h1>
-      <div id="chatList"></div>
-    </div>
-  
-    <div id="chatArea">
-      <div id="noChat">Выберите чат для общения</div>
+      </div>    
+    </div>  
     
-      <div id="chatContainer" class="chat-container" style="display: none">
-        <!-- Navbar -->
-        <div class="chat-navbar">
-          <img src="" id="avatar-friend" alt="">
-          <div id="chatTitle" class="chat-title"></div>
-          <button class="chat-info" onclick="toggleMenu(event)">⋮</button>
-          <div id="chatMenu" class="chat-menu">
-            <div onclick="openProfile()">Профиль</div>
-            <div onclick="confirmDeleteChat()">Удалить чат</div>
-          </div>
-        </div>
+    <script type="module" src="chat.js"></script>
+    </body>
     
-        <!-- Сообщения -->
-        <div id="messages" class="messages"></div>
-        <div id="messageMenu" class="message-menu">
-          <div id="replyOption">Ответить</div>
-          <div id="editOption">Изменить</div>
-          <div id="deleteOption">Удалить</div>
-        </div>
-        <div id="deleteMessageModal" class="modal">
-          <div class="modal-content">
-            <p class="text">Удалить сообщение?</p>
-        
-            <label class="label">
-              <input class="box" type="checkbox" id="deleteForAll">
-              Удалить у всех
-            </label>
-        
-            <button class="da" onclick="confirmDeleteMessage()">Удалить</button>
-            <button class="da" onclick="closeDeleteMessage()">Отмена</button>
-          </div>
-        </div>
-    
-        <!-- Поле ввода -->
-        <div id="inputArea" class="input-area">
-          <video id="videoRecordPreview" autoplay muted playsinline style="display:none; width: 150px; height: 150px; border-radius: 50%; object-fit: cover; position: absolute; bottom: 80px; right: 20px; border: 3px solid #0088cc; transform: scaleX(-1);"></video>
-        
-          <div class="reply" id="replyPreview" style="display:none;"></div>
-          
-          <textarea autocomplete="off" id="messageInput" placeholder="Напиши сообщение..." class="input-area-input"></textarea>
-          <input type="file" id="fileInput" hidden>
-          <button class="file" onclick="document.getElementById('fileInput').click()">📎</button>
-          
-          <button id="mainActionBtn" class="send-btn">🎤</button>
-        </div>
-      </div>
-    </div>    
-    
-    <div id="profileModal" class="modal-prof">
-      <div class="modal-prof-content">
-        <div class="modal-prof-header">
-          <button onclick="closeProfile()" class="close">✖</button>
-        </div>
-        <div class="h2">
-          <div id="profileAvatar" class="avatar-large"></div>
-          <h3 id="profileUsername"></h3>
-        </div>
-        <p class="prof-text" id="profileBiotext">О себе:</p>
-        <p class="describe" id="profileBio"></p>
-        <div class="contact-box">
-          <input autocomplete="off" id="contactName" placeholder="Сохранить как..">
-          <button onclick="saveContactName()">Сохранить контакт</button>
-        </div>
-      </div>
-    </div>
-    
-    <div id="deleteModal" class="modal">
-      <div class="modal-content">
-        <p class="text">Удалить чат?</p>
-        <div class="choose">
-          <button class="da" onclick="deleteChat()">Да</button>
-          <button class="da" onclick="closeDelete()">Нет</button>
-        </div>
-      </div>
-    </div>    
-  </div>  
-  
-  <script type="module" src="chat.js"></script>
-  </body>
-  
-</html>
+  </html>

@@ -868,19 +868,19 @@ let isLongPress = false;
 
 // 1. Функция обновления иконки (вызываем везде)
 function updateButtonUI() {
-    if (isRecording) {
-        mainBtn.innerText = "🤙"; // Кнопка становится кнопкой отправки во время записи
-        return;
-    }
-    
-    if (messageInput.value.trim().length > 0) {
-        currentMode = "text";
-        mainBtn.innerText = "🤙";
-    } else {
-        const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
-        currentMode = lastMedia;
-        mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
-    }
+  const mainBtn = document.getElementById("mainActionBtn");
+  const messageInput = document.getElementById("messageInput");
+  
+  if (isSending) return; // Если отправляем — не меняем иконку раньше времени
+
+  if (messageInput.value.trim().length > 0) {
+      currentMode = "text";
+      mainBtn.innerText = "🤙";
+  } else {
+      const lastMedia = localStorage.getItem("lastMediaMode") || "voice";
+      currentMode = lastMedia;
+      mainBtn.innerText = currentMode === "voice" ? "🎤" : "📷";
+  }
 }
 
 // 2. Логика нажатия (Исправленная)
@@ -895,17 +895,18 @@ const startPress = (e) => {
 };
 
 const endPress = (e) => {
+  // Останавливаем дальнейшую обработку (чтобы не было второго клика)
+  if (e.cancelable) e.preventDefault(); 
+  
   clearTimeout(pressTimer);
   
-  // Если запись уже идет — мы ничего не делаем при отпускании пальца.
-  // Остановка будет только по клику (mainBtn.onclick).
-  if (isRecording) return;
+  if (isRecording) return; // Если пишем медиа, клик обработает mainBtn.onclick
 
-  // Если это был короткий клик (не зажатие)
   if (!isLongPress) {
       if (messageInput.value.trim().length > 0) {
-          window.sendMessage();
+          window.sendMessage(); // Отправляем текст
       } else {
+          // Переключаем режим 🎤/📷
           currentMode = (currentMode === "voice") ? "video" : "voice";
           localStorage.setItem("lastMediaMode", currentMode);
           updateButtonUI();
@@ -916,8 +917,10 @@ const endPress = (e) => {
 // Привязываем события
 mainBtn.addEventListener("mousedown", startPress);
 mainBtn.addEventListener("mouseup", endPress);
-mainBtn.addEventListener("touchstart", startPress);
-mainBtn.addEventListener("touchend", endPress);
+
+// Для мобильных используем passive: false, чтобы работал preventDefault
+mainBtn.addEventListener("touchstart", startPress, { passive: false });
+mainBtn.addEventListener("touchend", endPress, { passive: false }); 
 
 // ГЛАВНОЕ: Клик по кнопке когда запись ИДЕТ
 mainBtn.onclick = () => {
@@ -1007,40 +1010,58 @@ async function uploadMediaMessage(file, type) {
 }
   
   /* ===== SEND MESSAGE ===== */
+  let isSending = false; // Добавь эту переменную ВНЕ функции (в начало файла или перед sendMessage)
+
   window.sendMessage = async function () {
-    const input = document.getElementById("messageInput");
-    const text = input.value.trim();
-    if (!currentChatId || !text) return;
-
-    if (window.editingMessageId) {
-
-      await updateDoc(
-        doc(db, "messages", window.editingMessageId),
-        {
-          text: messageInput.value,
-          edited: true
-        }
-      );
-    
-      window.editingMessageId = null;
-      messageInput.value = "";
-      return;
-    }
-    
-    await addDoc(collection(db, "messages"), {
-      chatId: currentChatId,
-      text: text,
-      sender: currentUser,
-      createdAt: new Date(),
-      deletedFor: [],
-      edited: false,
-      replyToid: replyingTo ? replyingTo.id : null,
-      replyTotext: replyingTo ? replyingTo.text : null,
-      replyfrom: replyingTo ? replyingTo.user : null
-    });
-    replyingTo = null; // после отправки сбрасываем
-    document.getElementById("replyPreview").style.display = "none";
-
-    input.value = "";
-    updateButtonUI();
+      const input = document.getElementById("messageInput");
+      const text = input.value.trim();
+      const btn = document.getElementById("mainActionBtn");
+  
+      // 1. ЗАЩИТА: Если уже идет отправка, или нет чата, или пусто — выходим
+      if (isSending || !currentChatId || !text) return;
+  
+      try {
+          isSending = true; // Блокируем повторные вызовы
+          btn.disabled = true; // Делаем кнопку неактивной (чтобы не спамили)
+  
+          if (window.editingMessageId) {
+              await updateDoc(
+                  doc(db, "messages", window.editingMessageId),
+                  {
+                      text: text, // Используем уже обрезанный text
+                      edited: true
+                  }
+              );
+              window.editingMessageId = null;
+          } else {
+              // Обычная отправка
+              await addDoc(collection(db, "messages"), {
+                  chatId: currentChatId,
+                  text: text,
+                  sender: currentUser,
+                  createdAt: new Date(),
+                  deletedFor: [],
+                  edited: false,
+                  replyToid: replyingTo ? replyingTo.id : null,
+                  replyTotext: replyingTo ? replyingTo.text : null,
+                  replyfrom: replyingTo ? replyingTo.user : null
+              });
+  
+              // Сброс реплая после успешной отправки
+              replyingTo = null; 
+              document.getElementById("replyPreview").style.display = "none";
+          }
+  
+          // Очищаем поле только после успеха
+          input.value = "";
+  
+      } catch (error) {
+          console.error("Ошибка при отправке:", error);
+          alert("Не удалось отправить сообщение");
+      } finally {
+          // ВАЖНО: Разблокируем всё обратно
+          isSending = false;
+          btn.disabled = false;
+          updateButtonUI(); // Возвращаем иконку (микрофон/камеру)
+      }
   };
