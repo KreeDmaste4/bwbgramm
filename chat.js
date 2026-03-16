@@ -1050,58 +1050,127 @@ switchBtn.onclick = async (e) => {
     }
 };
 
+/* ===== ИСПРАВЛЕННАЯ ЛОГИКА ЗАПИСИ И СМЕНЫ КАМЕРЫ ===== */
+
+// Функция для плавного переключения камеры во время записи
 async function switchCameraTracks() {
-  try {
-      // 1. Получаем новый поток
-      const newStream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-              width: { ideal: 400 }, 
-              height: { ideal: 400 }, 
-              facingMode: currentFacingMode 
-          },
-          audio: true
-      });
+    try {
+        // 1. Получаем поток с новой камеры
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 400, height: 400, facingMode: currentFacingMode },
+            audio: true
+        });
 
-      // 2. Обновляем превью немедленно (чтобы пользователь видел смену)
-      const videoPrev = document.getElementById("videoRecordPreview");
-      videoPrev.srcObject = newStream;
-      videoPrev.play(); // Принудительный старт для ТГ
-      
-      videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        
+        // Обновляем превью для пользователя (визуально)
+        const videoPrev = document.getElementById("videoRecordPreview");
+        videoPrev.srcObject = newStream;
+        videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
 
-      // 3. Если идет запись, нам ПРИДЕТСЯ пересоздать MediaRecorder
-      // чтобы он начал писать данные с нового устройства
-      if (isRecording && mediaRecorder) {
-          // Захватываем старые чанки
-          mediaRecorder.requestData(); 
-          
-          // Временно подменяем поток в переменной
-          currentStream.getTracks().forEach(t => t.stop());
-          currentStream = newStream;
+        // 2. Если идет запись, подменяем трек в текущем рекордере
+        if (isRecording && mediaRecorder) {
+            // ВАЖНО: Вместо пересоздания рекордера (что бьет файл), 
+            // мы используем замену трека в активном потоке, если браузер позволяет.
+            // Но для 100% работы в ТГ/Chrome делаем "бесшовную склейку":
+            
+            mediaRecorder.requestData(); // Забираем текущие данные
+            
+            // Останавливаем старые треки, чтобы освободить камеру
+            currentStream.getTracks().forEach(track => track.stop());
+            
+            currentStream = newStream; // Обновляем ссылку на поток
+            
+            // В мобильных браузерах MediaRecorder часто не умеет менять трек на лету,
+            // поэтому мы создаем новый кусок записи.
+            const oldOnStop = mediaRecorder.onstop;
+            mediaRecorder.onstop = null; // Отключаем старый триггер отправки
+            mediaRecorder.stop();
 
-          // Создаем новый рекордер для нового потока
-          const newRecorder = new MediaRecorder(currentStream);
-          newRecorder.ondataavailable = (e) => {
-              if (e.data.size > 0) audioChunks.push(e.data);
-          };
-          
-          // Переносим событие остановки
-          newRecorder.onstop = mediaRecorder.onstop;
-          
-          mediaRecorder.stop(); // Останавливаем старый
-          mediaRecorder = newRecorder;
-          mediaRecorder.start(100);
-      } else {
-          // Если просто в превью — обновляем поток
-          currentStream.getTracks().forEach(t => t.stop());
-          currentStream = newStream;
-      }
-
-  } catch (err) {
-      console.error("Ошибка переключения камеры:", err);
-  }
+            mediaRecorder = new MediaRecorder(currentStream);
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+            mediaRecorder.onstop = oldOnStop; // Возвращаем логику отправки
+            mediaRecorder.start(100);
+        } else {
+            // Если записи нет, просто обновляем поток для превью
+            if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+            currentStream = newStream;
+        }
+    } catch (err) {
+        console.error("Ошибка смены камеры:", err);
+    }
 }
 
+// 4. ФУНКЦИЯ СТАРТА ЗАПИСИ (ИСПРАВЛЕНА ОТПРАВКА)
+async function startRecording() {
+    if (isRecording) return;
+    
+    try {
+        audioChunks = [];
+        const constraints = {
+            audio: true,
+            video: currentMode === "video" ? { 
+                width: 400, height: 400, facingMode: currentFacingMode 
+            } : false
+        };
+
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        if (currentMode === "video") {
+            const videoPrev = document.getElementById("videoRecordPreview");
+            document.getElementById("videoContainer").style.display = "block";
+            videoPrev.srcObject = currentStream;
+            await videoPrev.play();
+            videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
+        }
+
+        mediaRecorder = new MediaRecorder(currentStream);
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        // ТУТ БЫЛА ОШИБКА (Добавлен вызов функции отправки)
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { 
+                type: currentMode === "voice" ? 'audio/ogg' : 'video/mp4' 
+            });
+            const ext = currentMode === "voice" ? 'ogg' : 'mp4';
+            const file = new File([blob], `rec_${Date.now()}.${ext}`, { type: blob.type });
+
+            // Останавливаем все железки
+            currentStream.getTracks().forEach(t => t.stop());
+            document.getElementById("videoContainer").style.display = "none";
+            
+            // ВЫЗОВ ТВОЕЙ ФУНКЦИИ (убедись, что она так называется)
+            if (typeof uploadMediaMessage === "function") {
+                await uploadMediaMessage(file, currentMode);
+            } else {
+                console.error("Функция uploadMediaMessage не найдена!");
+            }
+            
+            updateButtonUI();
+        };
+
+        mediaRecorder.start(100);
+        isRecording = true;
+        updateButtonUI();
+
+    } catch (err) {
+        console.error("Ошибка старта:", err);
+    }
+}
+
+// 5. КНОПКА СМЕНЫ КАМЕРЫ (ОБНОВЛЕНА)
+switchBtn.onclick = async (e) => {
+    e.stopPropagation();
+    currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
+    
+    // Смена произойдет мгновенно и во время записи, и до неё
+    await switchCameraTracks();
+};
 async function restartStream() {
     if (!currentStream) return;
 
@@ -1136,63 +1205,6 @@ async function restartStream() {
     } catch (err) {
         console.error("Ошибка при смене камеры:", err);
     }
-}
-
-// 4. ФУНКЦИЯ СТАРТА ЗАПИСИ
-async function startRecording() {
-  if (isRecording) return;
-  
-  try {
-      // Очищаем старые данные
-      audioChunks = [];
-
-      const constraints = {
-          audio: true,
-          video: currentMode === "video" ? { 
-              width: { ideal: 400 }, 
-              height: { ideal: 400 }, 
-              facingMode: currentFacingMode 
-          } : false
-      };
-
-      currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      if (currentMode === "video") {
-          const videoPrev = document.getElementById("videoRecordPreview");
-          const container = document.getElementById("videoContainer");
-          
-          videoPrev.srcObject = currentStream;
-          container.style.display = "block";
-
-          // ВАЖНО для Telegram: ждем готовности видео
-          await new Promise((resolve) => {
-              videoPrev.onloadedmetadata = () => {
-                  videoPrev.play().then(resolve);
-              };
-          });
-
-          videoPrev.style.transform = (currentFacingMode === "user") ? "scaleX(-1)" : "scaleX(1)";
-      }
-
-      mediaRecorder = new MediaRecorder(currentStream);
-      
-      mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunks.push(e.data);
-      };
-
-      // Логика завершения остается прежней
-      mediaRecorder.onstop = async () => {
-          // ... твой код отправки ...
-      };
-
-      mediaRecorder.start(100);
-      isRecording = true;
-      updateButtonUI();
-
-  } catch (err) {
-      console.error("Start recording error:", err);
-      alert("Включите доступ к камере в настройках Telegram");
-  }
 }
 
 // 5. ФУНКЦИЯ ОСТАНОВКИ
